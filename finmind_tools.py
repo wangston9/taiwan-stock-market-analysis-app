@@ -13,14 +13,16 @@ from langchain.tools import tool
 
 # --- Load Token ---
 load_dotenv()
-FINMIND_TOKEN = os.getenv("FINMIND_TOKEN")
-
-if not FINMIND_TOKEN:
-    raise ValueError("❌ FINMIND_TOKEN not found. Please add it to your .env file.")
+FINMIND_TOKEN = os.getenv("FINMIND_TOKEN", "")
 
 # --- Initialize API ---
-api = DataLoader()
-api.login_by_token(api_token=FINMIND_TOKEN)
+api = None
+if FINMIND_TOKEN:
+    try:
+        api = DataLoader()
+        api.login_by_token(api_token=FINMIND_TOKEN)
+    except:
+        api = None
 
 # --- FinMind Stock Info ---
 def get_taiwan_stock_info(token=FINMIND_TOKEN):
@@ -336,6 +338,9 @@ analyze which stock is the best overall choice and justify your answer.
 
 # --- Get all 3 reports for a stock ---
 def get_all_financials(stock_id: str, start_date: str = "2019-01-01") -> pd.DataFrame:
+    if not api:
+        print(f"❌ API not initialized. Cannot fetch data for {stock_id}")
+        return pd.DataFrame()
     try:
         fin = api.taiwan_stock_financial_statement(stock_id=stock_id, start_date=start_date)
         bal = api.taiwan_stock_balance_sheet(stock_id=stock_id, start_date=start_date)
