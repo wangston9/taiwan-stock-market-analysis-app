@@ -1,0 +1,86 @@
+name: Deploy Streamlit App
+
+on:
+  # Trigger on push to main branch
+  push:
+    branches: [ main ]
+    paths:
+      - '**.py'
+      - 'requirements.txt'
+      - 'finmind_data/**'
+  
+  # Allow manual deployment
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.9'
+        cache: 'pip'
+    
+    - name: Install dependencies
+      run: |
+        pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install pytest pytest-cov
+    
+    - name: Run tests
+      run: |
+        # Run tests if you have any
+        # pytest tests/ --cov=./ --cov-report=xml
+        echo "Add your tests here"
+    
+    - name: Check Streamlit app syntax
+      run: |
+        python -m py_compile Dashboard_儀表板.py
+        python -m py_compile pages/*.py
+        python -m py_compile modules/*.py
+        echo "✅ All Python files compile successfully"
+
+  deploy-to-streamlit-cloud:
+    needs: test
+    runs-on: ubuntu-latest
+    # Only deploy from main branch
+    if: github.ref == 'refs/heads/main'
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Deploy to Streamlit Cloud
+      env:
+        STREAMLIT_API_TOKEN: ${{ secrets.STREAMLIT_API_TOKEN }}
+      run: |
+        # Note: Streamlit Cloud auto-deploys from GitHub
+        # This is a placeholder for custom deployment logic
+        echo "📱 App will auto-deploy via Streamlit Cloud GitHub integration"
+        echo "🔗 Check: https://share.streamlit.io/[your-username]/[your-repo]"
+
+  deploy-to-huggingface:
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        lfs: true
+    
+    - name: Push to Hugging Face Spaces
+      env:
+        HF_TOKEN: ${{ secrets.HF_TOKEN }}
+      run: |
+        # Install git-lfs for large files
+        git lfs install
+        
+        # Add Hugging Face remote
+        git remote add huggingface https://huggingface.co/spaces/${{ secrets.HF_USERNAME }}/${{ secrets.HF_SPACE_NAME }}
+        
+        # Push to Hugging Face (requires HF_TOKEN secret)
+        git push --force https://${{ secrets.HF_USERNAME }}:${{ secrets.HF_TOKEN }}@huggingface.co/spaces/${{ secrets.HF_USERNAME }}/${{ secrets.HF_SPACE_NAME }} main

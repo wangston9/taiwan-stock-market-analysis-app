@@ -1,0 +1,85 @@
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+ENV/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# OS files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.project
+.pydevproject
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# Data
+*.db
+*.sqlite
+*.sqlite3
+chroma_db/
+
+# Logs
+*.log
+logs/
+
+# Test files
+test*.py
+*_test.py
+
+# Temporary files
+*.tmp
+*.bak
+*.backup
+.cache
+
+# Download progress tracking
+download_progress.json
+finmind_data/.progress_*.json
+finmind_data/.last_download.json
+
+# Development scripts
+create_*.py
+add_more_*.py
+launch_*.command
+
+# API Keys and Tokens (NEVER commit these)
+api_keys.txt
+tokens.txt
+credentials.json

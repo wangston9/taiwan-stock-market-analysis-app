@@ -1,0 +1,136 @@
+name: Quarterly Data Update
+
+# Schedule to run after Taiwan quarterly reports are available
+on:
+  schedule:
+    # Runs at 2 AM UTC (10 AM Taiwan time) on these dates
+    - cron: '0 2 15 5 *'   # May 15 - Q1 data
+    - cron: '0 2 14 8 *'   # Aug 14 - Q2 data  
+    - cron: '0 2 14 11 *'  # Nov 14 - Q3 data
+    - cron: '0 2 31 3 *'   # Mar 31 - Q4 data
+  
+  # Allow manual trigger from GitHub UI
+  workflow_dispatch:
+    inputs:
+      force_download:
+        description: 'Force download even if not scheduled'
+        required: false
+        default: 'false'
+        type: boolean
+      specific_industry:
+        description: 'Download specific industry only (leave empty for all)'
+        required: false
+        default: ''
+        type: string
+
+jobs:
+  download-data:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120  # 2 hour timeout for large downloads
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v3
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.9'
+        cache: 'pip'
+    
+    - name: Install dependencies
+      run: |
+        pip install --upgrade pip
+        pip install requests pandas
+        # Install other requirements if you have requirements.txt
+        if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+    
+    - name: Check download schedule
+      if: github.event_name == 'schedule'
+      run: |
+        echo "📅 Checking if it's time to download..."
+        python download_all_industries.py --schedule
+    
+    - name: Download industry data
+      env:
+        FORCE_FLAG: ${{ github.event.inputs.force_download == 'true' && '--force' || '' }}
+        INDUSTRY_FLAG: ${{ github.event.inputs.specific_industry != '' && format('--industry "{0}"', github.event.inputs.specific_industry) || '' }}
+      run: |
+        echo "🚀 Starting data download..."
+        
+        # Run with appropriate flags
+        if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+          # Manual trigger - use input parameters
+          python download_all_industries.py $FORCE_FLAG $INDUSTRY_FLAG
+        else
+          # Scheduled run - normal download
+          python download_all_industries.py
+        fi
+    
+    - name: Check for changes
+      id: check_changes
+      run: |
+        git diff --quiet finmind_data/ || echo "changes=true" >> $GITHUB_OUTPUT
+        
+        # Count modified files
+        MODIFIED_COUNT=$(git diff --name-only finmind_data/ | wc -l)
+        echo "modified_count=$MODIFIED_COUNT" >> $GITHUB_OUTPUT
+        
+        # Get list of modified industries
+        MODIFIED_INDUSTRIES=$(git diff --name-only finmind_data/*.csv | xargs -I {} basename {} .csv | tr '\n' ', ' | sed 's/,$//')
+        echo "modified_industries=$MODIFIED_INDUSTRIES" >> $GITHUB_OUTPUT
+    
+    - name: Commit and push changes
+      if: steps.check_changes.outputs.changes == 'true'
+      run: |
+        git config --local user.email "github-actions[bot]@users.noreply.github.com"
+        git config --local user.name "github-actions[bot]"
+        
+        # Add all changed data files
+        git add finmind_data/*.csv
+        git add finmind_data/.last_download.json 2>/dev/null || true
+        
+        # Create detailed commit message
+        QUARTER=$(date +%Y-Q$((($(date +%-m)-1)/3+1)))
+        git commit -m "📊 Update Taiwan stock data for $QUARTER
+        
+        Updated ${{ steps.check_changes.outputs.modified_count }} industry files
+        Industries: ${{ steps.check_changes.outputs.modified_industries }}
+        
+        Automated quarterly data update via GitHub Actions"
+        
+        git push
+    
+    - name: Create issue if download failed
+      if: failure()
+      uses: actions/github-script@v6
+      with:
+        script: |
+          const date = new Date().toISOString().split('T')[0];
+          await github.rest.issues.create({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            title: `❌ Data download failed - ${date}`,
+            body: `The automated quarterly data download failed.\n\nWorkflow run: ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}\n\nPlease check:\n- API quota limits\n- Network connectivity\n- Script errors`,
+            labels: ['bug', 'data-update']
+          });
+    
+    - name: Summary
+      if: always()
+      run: |
+        echo "## 📊 Download Summary" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        
+        if [ "${{ steps.check_changes.outputs.changes }}" = "true" ]; then
+          echo "✅ Successfully updated ${{ steps.check_changes.outputs.modified_count }} industries" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Updated industries:**" >> $GITHUB_STEP_SUMMARY
+          echo "${{ steps.check_changes.outputs.modified_industries }}" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "ℹ️ No data changes detected" >> $GITHUB_STEP_SUMMARY
+        fi
+        
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "**Next scheduled update:** $(python download_all_industries.py --schedule | grep 'Next scheduled' | cut -d: -f2-)" >> $GITHUB_STEP_SUMMARY
